@@ -9,7 +9,7 @@ using DynamicGrids.Stencils
 using DynamicGrids.Setfield
 using DynamicGrids.StaticArrays
 using DynamicGrids.DimensionalData
-using DynamicGrids.DimensionalData.LookupArrays
+using DynamicGrids.DimensionalData.Lookups
 
 using Rasters
 
