@@ -1,0 +1,83 @@
+# Weekly merge of upstream changes into the `maintained` branch, pushed only if
+# it merges cleanly and the package still loads.
+# Upstream is only ever fetched from: the sole push target is this repository,
+# and the upstream remote below has its push URL disabled.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_URL: https://github.com/rafaqz/LandscapeChange.jl
+  UPSTREAM_BRANCH: main
+  MIRROR_BRANCH: upstream-main
+  MAINTAINED_BRANCH: maintained
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAINTAINED_BRANCH }}
+          fetch-depth: 0
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM_URL"
+          git remote set-url --push upstream DISABLED-never-push-to-upstream
+          git fetch upstream "$UPSTREAM_BRANCH"
+          git push origin "refs/remotes/upstream/$UPSTREAM_BRANCH:refs/heads/$MIRROR_BRANCH"
+          before=$(git rev-parse HEAD)
+          git merge --no-edit "upstream/$UPSTREAM_BRANCH"
+          if [ "$(git rev-parse HEAD)" = "$before" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: julia-actions/setup-julia@v2
+        if: steps.merge.outputs.changed == 'true'
+        with:
+          version: "1"
+      - uses: julia-actions/julia-buildpkg@v1
+        if: steps.merge.outputs.changed == 'true'
+      - name: Check the package still loads
+        if: steps.merge.outputs.changed == 'true'
+        run: julia --project=. -e 'using Pkg; name = Symbol(Pkg.project().name); @eval import $name'
+      - name: Push merged branch
+        if: steps.merge.outputs.changed == 'true'
+        run: git push origin "HEAD:refs/heads/$MAINTAINED_BRANCH"
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Upstream sync failed"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="Merging $UPSTREAM_URL ($UPSTREAM_BRANCH) into $MAINTAINED_BRANCH failed: $run_url
+
+          Resolve it locally, then push to this repository only:
+
+              git fetch upstream && git checkout $MAINTAINED_BRANCH && git merge upstream/$UPSTREAM_BRANCH
+              # fix conflicts or tests, then
+              git push origin $MAINTAINED_BRANCH"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+      - name: Keep the schedule from being disabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable sync-upstream.yml --repo "$GITHUB_REPOSITORY"
