@@ -20,7 +20,7 @@ permissions:
 env:
   UPSTREAM_URL: https://github.com/rafaqz/LandscapeChange.jl
   UPSTREAM_BRANCH: main
-  MIRROR_BRANCH: upstream-main
+  MIRROR_BRANCH: main
   MAINTAINED_BRANCH: maintained
 
 jobs:
