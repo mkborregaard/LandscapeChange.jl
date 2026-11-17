@@ -3,6 +3,10 @@ on:
   schedule:
     - cron: 0 0 * * *
   workflow_dispatch:
+# The GITHUB_TOKEN of a fork is read-only by default
+permissions:
+  contents: write
+  pull-requests: write
 jobs:
   CompatHelper:
     runs-on: ubuntu-latest
@@ -12,5 +16,4 @@ jobs:
       - name: CompatHelper.main()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMPATHELPER_PRIV: ${{ secrets.DOCUMENTER_KEY }}
         run: julia -e 'using CompatHelper; CompatHelper.main()'
